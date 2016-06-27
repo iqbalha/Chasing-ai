@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html>
+<body>
+<button onclick=reset()> Reset</button>
+<p> </p>
+<canvas id="canvas" width="400" height="200" style="border:1px solid"
+</canvas>
+
+<script>
+"strict mode"
+
+// ---------------------------------------------- Object Constructors -------------------------------------------------
+
+// Monster constructor
+function Monster(x, y) {
+	this.x = x;
+	this.y = y;
+	this.vRange = 100;
+}
+	
+// create queue object. (Queued elements are of the format [x, y, cost])
+// the x and y are relative to the matrix not the actual x, y value
+// on the map.
+function MinQueue() {
+	var list = [];
+	this.enqueue = function(element) { // method for adding to the queue
+		if (element.length != 3) { // error check
+			console.log("incorrect element size, cannot enqueue");
+			console.log(element);
+		}
+		else {
+			list.push(element);
+		}
+	}
+	this.dequeue = function() { // method for removing min element from the queue
+		if (this.isEmpty()) { // error checking
+			console.log("queue is empty, cannot dequeue");
+		}
+		else {
+			// find the element with the lowest cost
+			var smallest = 0;
+			for(var i = 1; i < list.length; i++) {
+				if (list[i][2] < list[smallest][2]) {
+					smallest = i;
+				}
+			}
+			// remember and delete, then return
+			var min = list[smallest];
+			list.splice(smallest, 1);
+			return min;
+		}
+	}
+	this.isEmpty = function() { // method for checking if the queue is empty
+		return list.length == 0;
+	}
+}
+
+// ------------------------------------------------------------- Main -------------------------------------------------
+var ctx = document.getElementById("canvas").getContext("2d");
+// person = movable green dot as player
+var person = {x: 12, y: 10};
+// monsters = red dots with ai movement
+var mons = [new Monster(6, 6), new Monster (15,15), new Monster(25, 10)];
+// obstacles array
+var obstacles = [[1,2], [10,6], [8,9], [10, 7], [10, 8],[14,9], [15, 12],
+ [13, 8], [19, 4], [2, 15], [25, 13], [34, 17], [19, 19], [26, 8]];
+// add key handler for person move
+this.onkeydown = function(){ keyHandler(event) };
+
+setInterval(moveMonsters, 400); // make the monsters move 2.5 times/second
+
+// ---------------------------------------------------------- Methods -------------------------------------------------
+
+// draw the image on the screen
+function reDraw() {
+	ctx.clearRect(0, 0, canvas.width, canvas.height); // clear the screen
+	// draw monster block
+    ctx.fillStyle = "green";
+	ctx.fillRect(person.x*10, person.y*10, 10, 10);
+	// draw monster block
+    ctx.fillStyle = "red";
+	for(var i in mons) {
+		ctx.fillRect(mons[i].x*10, mons[i].y*10, 10, 10);
+	}
+	// draw the obstacles on the screen
+	ctx.fillStyle = "black";
+	for(var i in obstacles) {
+		ctx.fillRect(obstacles[i][0]*10, obstacles[i][1]*10, 10, 10);
+	}
+}
+
+// reset the simulation // half working (added more entities so it doesn't
+// reset them all). No point finishing this
+function reset() {
+	mons[0].x = 6;
+	mons[0].y = 6;
+	person.x = 30;
+	person.y = 10;
+	reDraw();
+}
+
+// return whether entity 1 intersects with entity 2
+function intersect(ent1, ent2) {
+	return ((ent1[0] == ent2[0]) && (ent1[1] == ent2[1]))
+}
+					
+// check if the values are in the range
+function inRange(x, y, xMax, yMax) {
+	if ((0 <= x) && (x <= xMax)) {
+		if ((0 <= y) && (y <= yMax)) {
+			return true; }}
+	return false;
+}
+	
+// return a list of all adjacent spots to spot
+function adjacentList(spot) {
+	return [[spot[0] + 1, spot[1]], [spot[0] - 1, spot[1]], [spot[0],
+	spot[1] + 1], [spot[0], spot[1] - 1]];
+}
+
+// returns if the location is traversable 
+function canMove(x, y) {
+	for(var i in obstacles) { // check all obstacles
+		if (intersect(obstacles[i], [x,y])) return false;
+	}
+	// check if another monster is already there
+	for (var i = 0; i < mons.length; i++) {
+		if (intersect([mons[i].x, mons[i].y], [x,y])) return false;
+	}
+	//check the boundaries
+	if (inRange(x, y, canvas.width/10 - 1, canvas.height/10 - 1 )) return true;
+	return false;
+}
+
+// moves an entity to a spot if able
+function move(entity, spot) {
+	if (canMove(spot[0], spot[1])) {
+		entity.x = spot[0];
+		entity.y = spot[1];
+		reDraw();
+	}
+}
+
+// move all the monsters
+function moveMonsters() {
+	if (!mons) console.log("No monsters to move"); // error check
+	else {
+		for(var i = 0; i < mons.length; i++) {
+			smartMove(mons[i]);
+		}
+	}
+}
+
+// works as a toString method for 2d arrays (a nxn matrix)
+function printMatrix(m) {
+	var str = "";
+	for(var i = 0; i < m.length; i++) {
+		str += "  [ ";
+		for(var j = 0; j < m.length; j++) {
+			if (m[j][i] == undefined) {
+				str += " "; // blank space for empty
+			}
+			else if (m[j][i] == -9){
+				str += "N"; // N for not reachable
+			}
+			else {
+				str += m[j][i]; // value if it has one
+			}
+			if (j < m.length - 1) str += ", "; // spacing
+		}
+		str += "]\n"; // end row
+	}
+	return str;
+}
+
+// move in a random direction
+function randomMove(monster) {
+	var options = []; // add all directions that are traversable
+	var list = adjacentList([monster.x, monster.y]);
+	for (var i = 0; i < list.length; i++) {
+		if (canMove(list[i][0], list[i][1])) options.push(list[i]);
+	}
+	// randomly choose one of the options to move to
+	var randomIndex = Math.floor(Math.random() * options.length);
+	move(monster, options[randomIndex]);
+}
+
+// create a 2d array and have the places in vision (writeable) as -9
+function createVisionMatrix(range) {
+	var matrix = [];
+	// create a matrix for the map in the monster's vision range
+	// as a square (has more than the monster can see)
+	for(var i = 0; i <= range*2; i++) {
+		matrix.push([]);
+	}
+	// create the field of vision circle within the matrix 
+	// (by using -9 as a marker)
+	for(var a = -1*range; a <= range; a++) {
+		for(var b = -1*range; b <= range; b++) {
+			// a^2 + b^2 <= r^2 (then it's in the circle)
+			if (Math.pow(a, 2) + Math.pow(b, 2) <= Math.pow(range, 2)) {
+				matrix[a+range][b+range] = -9;
+			}
+		}
+	}
+	return matrix;
+}
+
+// fill the writeable spaces in the matrix with there value
+function fillVisionMatrix(matrix, monster) {
+	var range = monster.vRange; // shorter variable name
+	// set the starting point at cost 0
+	matrix[range][range] = 0;
+	var minQueue = new MinQueue();
+	var found = false;
+	// add the 4 directions into the queue
+	var list = adjacentList([range, range])
+	for (var i = 0; i < list.length; i++) {
+		minQueue.enqueue([list[i][0], list[i][1], 0]);
+	}
+	
+	// loop until the queue is empty
+	while (!minQueue.isEmpty()) {
+		// extract min from the queue
+		var min = minQueue.dequeue();
+
+		// check if the spot is in the matrix
+		if (inRange(min[0], min[1], range*2, range*2)) {
+			// check if the spot in the matrix is meant to be written
+			if (matrix[min[0]][min[1]] == -9) {
+				// if it's traversable add the cost otherwise set to -1
+				// use the actual x, y on the map to calculate if it canMove()
+				if (canMove(min[0] + monster.x - range,
+				min[1] + monster.y - range)) {
+					min[2]++; // increment cost
+					matrix[min[0]][min[1]] = min[2];
+					
+					// check if found
+					if (intersect([min[0] + monster.x - range,
+					min[1] + monster.y - range], [person.x, person.y])) {
+						found = true;
+					}
+					if (!found) { // add the 4 directions into the queue
+						list = adjacentList(min);
+						for (var i = 0; i < list.length; i++) {
+							minQueue.enqueue([list[i][0], list[i][1], min[2]]);
+						}
+					}
+				}
+				// set to in-traversable
+				else matrix[min[0]][min[1]] = -1; 
+			}
+		}
+	}
+	return matrix;
+}
+
+// find the min positive value in list and return it 
+function min_cordinate(list, matrix, range) {
+	min = undefined;
+	for (var i = 0; i < list.length; i++) { // check all values in the list
+		if (Math.pow(list[i][0] - range, 2) + Math.pow(list[i][1] - range, 2)
+		<= Math.pow(range, 2)) { // check if it's in the matrix
+			if (matrix[list[i][0]][list[i][1]] >= 0) {// this value is valid
+
+				// no valid min value has yet been found, set it as the new min
+				if (!min) min = list[i]; 
+				else {
+					var current = matrix[list[i][0]][list[i][1]];
+					var minVal = matrix[min[0]][min[1]];
+					// if the current value is less than the min value, set as min
+					if (current < minVal) min = list[i]; 
+					// if the value is the same as the min
+					else if (current == minVal) {
+						if (list[i][0] * list[i][1] > min[0] * min[1]) {
+							min = list[i];
+						} // then go on the path with lower diagonal distance
+					}
+				}
+			}
+		}
+	}
+	return min;
+}
+
+// attacks player with monster's attack
+function attack(monster) {
+	console.log("Human Mismatch");
+	// some sort of attack code here (animation and damage)
+}
+
+// move monster who can move to a player
+function combatMove(monster, matrix) {
+	// create x,y variables relative to the matrix
+	var x = person.x - monster.x + monster.vRange;
+	var y = person.y - monster.y + monster.vRange; 
+	var distance = matrix[x][y];
+
+	if (distance > 1) { // we want to get closer to be in attack range
+		var min = [x, y];
+		// determine path to player
+		// start from the current spot and
+		while (distance != 0) {
+			last = min; // work backwards using all four directions
+			list = adjacentList(min);;
+			// take the lowest cost path from the directions
+			min = min_cordinate(list, matrix, monster.vRange); 
+			// if the path is blocked then we can't really do anything
+			if (!min) return false; 
+			distance = matrix[min[0]][min[1]]; //check if we got to the monster
+		}
+		// make the x, y values relative to the map not the matrix
+		last[0] += monster.x - monster.vRange;
+		last[1] += monster.y - monster.vRange;
+		
+		// approach player
+		move(monster, last);
+	}
+	// attack the player
+	else if (distance >= 0) attack(monster);
+	return true;
+}
+
+// smartly move the monster to chase the person if he is in the monsters vision
+function smartMove(monster) {
+	// create shorter access variables
+	var x = person.x - monster.x;
+	var y = person.y - monster.y;
+	
+	// check if player is in vision
+	// (x2 - x1)^2 + (y2 - y1)^2 <= r^2 (basic geometry)
+	if (Math.pow(x, 2) + Math.pow(y, 2) <= Math.pow(monster.vRange, 2)) {
+		// Map the surroundings	
+		var matrix = createVisionMatrix(monster.vRange);
+		matrix = fillVisionMatrix(matrix, monster);
+		// change the x, y to be relative to the matrix
+		x += monster.vRange; y += monster.vRange; 
+		// can we move to the player?
+		if (typeof matrix[x][y] == typeof 1) {
+			// then perform the in combat move. If unable, then move randomly
+			if (!combatMove(monster, matrix)) randomMove(monster);
+		}	
+	}
+	// non-combat move
+	else randomMove(monster);
+}
+
+// key press event handler
+function keyHandler(k) {
+	// "UP ARROW" KEY
+	if (k.keyCode == 38) {
+		move(person,[person.x, person.y - 1]);
+	}
+	
+	// "DOWN ARROW" KEY
+	else if (k.keyCode == 40) {
+		move(person, [person.x, person.y + 1]);
+	}
+	
+	// "LEFT ARROW" KEY
+	else if (k.keyCode == 37) {
+		move(person, [person.x - 1, person.y]);
+	}
+	
+	// "RIGHT ARROW" KEY
+	else if (k.keyCode == 39) {
+		move(person, [person.x + 1, person.y]);
+	}		
+	console.log("keyCode :", k.keyCode);
+}
+</script>
+</body>
+</html>
